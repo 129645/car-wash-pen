@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>運筆練習：開車去洗車</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #8fcf7a;
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+
+  #hud { position: fixed; top: 0; left: 0; right: 0; height: 64px; display: none; align-items: center;
+    gap: 14px; padding: 0 16px; background: rgba(255,255,255,.92); box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    font-size: 22px; color: #333; z-index: 5; }
+  #hud .chip { padding: 6px 14px; border-radius: 999px; background: #eef3fb; white-space: nowrap; }
+  #hud .chip b { color: #1d5fbf; }
+  #hud #outChip { background: #fdeaea; }
+  #hud #outChip b { color: #d62828; font-size: 26px; }
+  #hud .spacer { flex: 1; }
+  #hud button { font-size: 18px; padding: 8px 14px; }
+  .flash { animation: flash .5s; }
+  @keyframes flash { 0%{ transform: scale(1.25); background:#ff9b9b; } 100%{ transform: scale(1); } }
+
+  .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(30,50,40,.45); z-index: 10; padding: 16px; }
+  .overlay.show { display: flex; }
+  .panel { background: #fff; border-radius: 24px; padding: 28px 34px; max-width: 900px; width: 100%;
+    max-height: 100%; overflow: auto; box-shadow: 0 10px 40px rgba(0,0,0,.3); text-align: center; }
+  h1 { font-size: 40px; color: #1d5fbf; margin-bottom: 6px; }
+  h2 { font-size: 30px; color: #1d5fbf; margin-bottom: 14px; }
+  .sub { font-size: 20px; color: #555; margin-bottom: 18px; }
+  .label { font-size: 22px; font-weight: bold; margin: 16px 0 10px; color: #333; }
+  input[type=text] { font-size: 22px; padding: 8px 14px; border: 2px solid #b7c7e0; border-radius: 12px; width: 260px; text-align: center; }
+  .cars { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .car-opt { border: 4px solid #dde5f0; border-radius: 18px; padding: 10px; width: 200px; cursor: pointer; background: #f8fbff; }
+  .car-opt img { width: 100%; height: 110px; object-fit: contain; }
+  .car-opt div { font-size: 20px; margin-top: 4px; }
+  .car-opt.sel { border-color: #ff9f1c; background: #fff4e0; }
+  .levels { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .lv-opt { font-size: 20px; padding: 10px 16px; border-radius: 14px; border: 3px solid #dde5f0; background: #f8fbff; cursor: pointer; min-width: 120px; }
+  .lv-opt small { display: block; font-size: 15px; color: #777; }
+  .lv-opt.sel { border-color: #1d5fbf; background: #e4eeff; }
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 14px; background: #e6ecf5; color: #333; }
+  .big { font-size: 26px; padding: 14px 34px; background: #ff9f1c; color: #fff; font-weight: bold; margin: 8px; box-shadow: 0 4px 0 #d17c00; }
+  .mid { font-size: 20px; padding: 10px 22px; margin: 6px; }
+  .blue { background: #1d5fbf; color: #fff; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 20px; }
+  th, td { border-bottom: 1px solid #e3e8ef; padding: 8px; }
+  th { background: #eef3fb; }
+  td.bad { color: #d62828; font-weight: bold; }
+  td.good { color: #2a9d4b; font-weight: bold; }
+  .big-num { font-size: 56px; font-weight: bold; color: #d62828; }
+  .stars { font-size: 44px; letter-spacing: 6px; color: #ffb703; margin: 6px 0; }
+  #hint { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: rgba(0,0,0,.7); color: #fff;
+    font-size: 22px; padding: 10px 22px; border-radius: 999px; z-index: 6; display: none; pointer-events: none; }
+  .note { font-size: 16px; color: #777; margin-top: 10px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <span class="chip">第 <b id="hLevel">1</b> 關</span>
+  <span class="chip">車道 <b id="hTrack">1</b>/5：<b id="hShape">直線</b></span>
+  <span class="chip" id="outChip">超出車道：<b id="hOut">0</b> 次</span>
+  <span class="chip">時間 <b id="hTime">0.0</b> 秒</span>
+  <span class="spacer"></span>
+  <button id="btnRetry">重來這條</button>
+  <button id="btnHome">回首頁</button>
+</div>
+<div id="hint"></div>
+
+<!-- 首頁 -->
+<div class="overlay show" id="home">
+  <div class="panel">
+    <h1>🚗 開車去洗車</h1>
+    <div class="sub">把觸控筆放在車頭前面的圓圈，沿著車道中線畫到右邊的洗車機，<br>車子會跟在筆後面開過去。小心不要開出車道喔！</div>
+    <div class="label">玩家名字</div>
+    <input type="text" id="playerName" placeholder="（可不填）">
+    <div class="label">選一台車</div>
+    <div class="cars" id="carList"></div>
+    <div class="label">從第幾關開始？（越後面車道越窄）</div>
+    <div class="levels" id="levelList"></div>
+    <div style="margin-top:20px">
+      <button class="big" id="btnStart">開始遊戲</button>
+      <button class="mid" id="btnRecords">成果紀錄</button>
+    </div>
+    <div class="note">每一關有 5 條車道：直線 → 波浪 → 鋸齒 → 方形彎道 → 半圓彎道</div>
+  </div>
+</div>
+
+<!-- 一條車道完成 -->
+<div class="overlay" id="done" style="background:rgba(30,50,40,.25)">
+  <div class="panel" style="max-width:520px">
+    <h2>✨ 洗得亮晶晶！</h2>
+    <div class="stars" id="dStars"></div>
+    <div style="font-size:22px">超出車道</div>
+    <div class="big-num" id="dOut">0</div>
+    <div style="font-size:22px;margin-bottom:12px">用時 <b id="dTime">0</b> 秒</div>
+    <button class="big" id="btnNext">下一條車道 ▶</button>
+    <div><button class="mid" id="btnRedo">再練一次這條</button></div>
+  </div>
+</div>
+
+<!-- 關卡總結 -->
+<div class="overlay" id="summary">
+  <div class="panel">
+    <h2 id="sTitle">第 1 關完成！</h2>
+    <table>
+      <thead><tr><th>車道</th><th>形狀</th><th>超出車道（次）</th><th>時間（秒）</th></tr></thead>
+      <tbody id="sBody"></tbody>
+    </table>
+    <div id="sButtons"></div>
+  </div>
+</div>
+
+<!-- 成果紀錄 -->
+<div class="overlay" id="records">
+  <div class="panel">
+    <h2>📋 成果紀錄</h2>
+    <div class="sub">本次開啟網頁後完成的紀錄（關閉網頁前請先下載）</div>
+    <table>
+      <thead><tr><th>玩家</th><th>車</th><th>關卡（寬度）</th><th>車道</th><th>超出車道</th><th>時間（秒）</th><th>完成時間</th></tr></thead>
+      <tbody id="rBody"></tbody>
+    </table>
+    <button class="mid blue" id="btnCsv">下載 CSV（Excel 可開）</button>
+    <button class="mid" id="btnRecClose">關閉</button>
+  </div>
+</div>
+
+<audio id="sfx" src="assets/car-sound.mp3" preload="auto"></audio>
+
+<script>
+(() => {
+  // ===== 設定 =====
+  const W = 1600, H = 900, CY = 470;                 // 邏輯畫面大小、車道中線高度
+  const LEVEL_WIDTHS = [130, 105, 85, 65, 48];       // 第 1~5 關車道寬度（邏輯像素）
+  const CARS = [
+    { id: 'firetruck', name: '消防車', src: 'assets/firetruck.png' },
+    { id: 'crane',     name: '吊車',   src: 'assets/crane.png' },
+    { id: 'police',    name: '警車',   src: 'assets/police.png' },
+  ];
+  const START_X = 80, START_CAR_X = 140, SHAPE_X0 = 260, SHAPE_X1 = 1300, END_X = 1520;
+  const FINISH_X = 1430;                             // 車子到達這裡就算進入洗車機
+
+  // ===== 車道形狀 =====
+  function densify(pts, step = 4) {
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const d = Math.hypot(b.x - a.x, b.y - a.y);
+      const n = Math.max(1, Math.ceil(d / step));
+      for (let k = 1; k <= n; k++) out.push({ x: a.x + (b.x - a.x) * k / n, y: a.y + (b.y - a.y) * k / n });
+    }
+    return out;
+  }
+  // 把折線的轉角改成圓角
+  function fillet(c, r) {
+    const out = [c[0]];
+    for (let i = 1; i < c.length - 1; i++) {
+      const P = c[i], A = c[i - 1], B = c[i + 1];
+      let d1 = { x: A.x - P.x, y: A.y - P.y }, d2 = { x: B.x - P.x, y: B.y - P.y };
+      const l1 = Math.hypot(d1.x, d1.y), l2 = Math.hypot(d2.x, d2.y);
+      d1 = { x: d1.x / l1, y: d1.y / l1 }; d2 = { x: d2.x / l2, y: d2.y / l2 };
+      const th = Math.acos(Math.max(-1, Math.min(1, d1.x * d2.x + d1.y * d2.y)));
+      const t = r / Math.tan(th / 2);
+      const T1 = { x: P.x + d1.x * t, y: P.y + d1.y * t }, T2 = { x: P.x + d2.x * t, y: P.y + d2.y * t };
+      let bx = d1.x + d2.x, by = d1.y + d2.y; const bl = Math.hypot(bx, by); bx /= bl; by /= bl;
+      const h = r / Math.sin(th / 2);
+      const C = { x: P.x + bx * h, y: P.y + by * h };
+      const a1 = Math.atan2(T1.y - C.y, T1.x - C.x);
+      let da = Math.atan2(T2.y - C.y, T2.x - C.x) - a1;
+      while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+      const n = 16;
+      for (let k = 0; k <= n; k++) { const a = a1 + da * k / n; out.push({ x: C.x + r * Math.cos(a), y: C.y + r * Math.sin(a) }); }
+    }
+    out.push(c[c.length - 1]);
+    return out;
+  }
+  function withEnds(mid) {
+    return densify([{ x: START_X, y: CY }, ...mid, { x: END_X, y: CY }]);
+  }
+  const SHAPES = [
+    { name: '直線', build: () => withEnds([{ x: SHAPE_X0, y: CY }, { x: SHAPE_X1, y: CY }]) },
+    { name: '波浪', build: () => {
+        const pts = [];
+        for (let x = SHAPE_X0; x <= SHAPE_X1; x += 4) {
+          const u = (x - SHAPE_X0) / (SHAPE_X1 - SHAPE_X0);
+          pts.push({ x, y: CY - 170 * Math.sin(2 * Math.PI * 2 * u) });
+        }
+        return withEnds(pts);
+      } },
+    { name: '鋸齒', build: () => withEnds([
+        { x: 260, y: CY }, { x: 390, y: CY - 160 }, { x: 650, y: CY + 160 },
+        { x: 910, y: CY - 160 }, { x: 1170, y: CY + 160 }, { x: 1300, y: CY }]) },
+    { name: '方形彎道', build: () => withEnds(fillet([
+        { x: 260, y: CY }, { x: 360, y: CY }, { x: 360, y: CY - 150 }, { x: 520, y: CY - 150 },
+        { x: 520, y: CY + 150 }, { x: 680, y: CY + 150 }, { x: 680, y: CY - 150 }, { x: 840, y: CY - 150 },
+        { x: 840, y: CY + 150 }, { x: 1000, y: CY + 150 }, { x: 1000, y: CY - 150 }, { x: 1160, y: CY - 150 },
+        { x: 1160, y: CY }, { x: 1300, y: CY }], 45)) },
+    { name: '半圓彎道', build: () => {
+        const R = 90, pts = [{ x: 260, y: CY }];
+        const bumps = [[340, -1], [560, 1], [780, -1], [1000, 1]];   // 起點 x，-1 往上凸、1 往下凸
+        for (const [x0, dir] of bumps) {
+          pts.push({ x: x0, y: CY });
+          const cx = x0 + R;
+          for (let k = 0; k <= 40; k++) {
+            const a = Math.PI - Math.PI * k / 40;
+            pts.push({ x: cx + R * Math.cos(a), y: CY + dir * R * Math.sin(a) });
+          }
+        }
+        pts.push({ x: 1300, y: CY });
+        return withEnds(pts);
+      } },
+  ];
+  const TRACKS = SHAPES.map(s => s.build());
+
+  // ===== 狀態 =====
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const imgs = {};
+  for (const c of CARS) { imgs[c.id] = new Image(); imgs[c.id].src = c.src; }
+  const washer = new Image(); washer.src = 'assets/washer.png';
+
+  let carId = 'firetruck', pickLevel = 0;
+  let level = 0, trackIdx = 0;
+  let laneW = LEVEL_WIDTHS[0], path = TRACKS[0], roadPath = null;
+  let car = { x: START_CAR_X, y: CY, ang: 0, flip: false };
+  let tip = { x: START_CAR_X, y: CY };   // 筆尖（車子在筆尖後面跟著走）
+  let strokes = [];                      // 留在畫面上的筆跡：[{pts:[{x,y,in}]}]
+  let dragging = false, activePointer = null, penSeen = false;
+  let outCount = 0, lastInside = true, startTime = 0, elapsed = 0, timing = false;
+  let phase = 'idle';                    // idle | play | washing | done
+  let washT = 0, washFrom = null;
+  let levelResults = [];
+  const records = [];
+  let bubbles = [];
+
+  // ===== 畫面縮放 =====
+  let scale = 1, ox = 0, oy = 0, dpr = 1;
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr;
+    const top = 64;                      // 上方資訊列
+    scale = Math.min(innerWidth / W, (innerHeight - top) / H);
+    ox = (innerWidth - W * scale) / 2; oy = top + (innerHeight - top - H * scale) / 2;
+  }
+  addEventListener('resize', resize); resize();
+  const toLogic = e => ({ x: (e.clientX - ox) / scale, y: (e.clientY - oy) / scale });
+
+  function buildRoad() {
+    roadPath = new Path2D();
+    roadPath.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) roadPath.lineTo(path[i].x, path[i].y);
+  }
+
+  // 點到車道中線的距離：只找「目前進度附近」的一段，避免直接跳到隔壁車道
+  let progress = 0;
+  function nearest(p, i0, i1) {
+    let best = Infinity, bi = i0;
+    for (let i = Math.max(1, i0); i <= Math.min(path.length - 1, i1); i++) {
+      const a = path[i - 1], b = path[i];
+      const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+      let t = L2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const ex = a.x + dx * t - p.x, ey = a.y + dy * t - p.y;
+      const d = ex * ex + ey * ey;
+      if (d < best) { best = d; bi = i; }
+    }
+    return { d: Math.sqrt(best), i: bi };
+  }
+  const WIN_BACK = 60, WIN_FWD = 60;          // 約前後 240 像素的車道範圍
+  function isInside(p, update = true) {
+    const r = nearest(p, progress - WIN_BACK, progress + WIN_FWD);
+    const inside = r.d <= laneW / 2;
+    if (inside && update) progress = r.i;
+    return inside;
+  }
+
+  const followDist = () => carSize().w / 2 + 12;   // 車頭和筆尖之間留一點空隙
+  const grabR = () => Math.max(40, laneW * 0.55);
+  function carSize() {
+    const img = imgs[carId];
+    const len = Math.max(60, laneW * 1.05);
+    const ratio = img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.75;
+    return { w: len, h: len * ratio };
+  }
+
+  // ===== 遊戲流程 =====
+  function startTrack() {
+    laneW = LEVEL_WIDTHS[level];
+    path = TRACKS[trackIdx];
+    buildRoad();
+    car = { x: START_CAR_X, y: CY, ang: 0, flip: false };
+    tip = { x: START_CAR_X + followDist(), y: CY };
+    strokes = []; dragging = false; activePointer = null; progress = 0;
+    outCount = 0; lastInside = true; elapsed = 0; timing = false;
+    bubbles = []; phase = 'play';
+    $('hLevel').textContent = level + 1;
+    $('hTrack').textContent = trackIdx + 1;
+    $('hShape').textContent = SHAPES[trackIdx].name;
+    $('hOut').textContent = 0; $('hTime').textContent = '0.0';
+    showHint('筆尖放在車頭前面的圓圈，沿著車道中線畫過去！', 2800);
+  }
+  function startLevel(lv) { level = lv; trackIdx = 0; levelResults = []; startTrack(); }
+
+  function finishTrack() {
+    phase = 'washing'; washT = 0; washFrom = { x: car.x, y: car.y };
+    dragging = false; timing = false;
+    const s = $('sfx'); try { s.currentTime = 0; s.play().catch(() => {}); } catch (e) {}
+    const r = { level: level + 1, width: LEVEL_WIDTHS[level], track: trackIdx + 1, shape: SHAPES[trackIdx].name,
+      outs: outCount, time: +elapsed.toFixed(1) };
+    levelResults[trackIdx] = r;
+    records.push({ name: $('playerName').value.trim() || '（未填）', car: CARS.find(c => c.id === carId).name,
+      ...r, date: new Date().toLocaleString('zh-TW', { hour12: false }) });
+  }
+
+  function showDone() {
+    phase = 'done';
+    $('dOut').textContent = outCount;
+    $('dOut').style.color = outCount === 0 ? '#2a9d4b' : '#d62828';
+    $('dTime').textContent = elapsed.toFixed(1);
+    $('dStars').textContent = outCount === 0 ? '★★★' : outCount <= 2 ? '★★☆' : '★☆☆';
+    $('btnNext').textContent = trackIdx < 4 ? '下一條車道 ▶' : '看本關結果 ▶';
+    $('done').classList.add('show');
+  }
+
+  function showSummary() {
+    $('sTitle').textContent = `第 ${level + 1} 關完成！（車道寬度 ${LEVEL_WIDTHS[level]}）`;
+    let total = 0, ttime = 0, rows = '';
+    levelResults.forEach(r => {
+      total += r.outs; ttime += r.time;
+      rows += `<tr><td>${r.track}</td><td>${r.shape}</td><td class="${r.outs ? 'bad' : 'good'}">${r.outs}</td><td>${r.time.toFixed(1)}</td></tr>`;
+    });
+    rows += `<tr style="font-weight:bold;background:#fff8e6"><td colspan="2">合計</td><td class="${total ? 'bad' : 'good'}">${total}</td><td>${ttime.toFixed(1)}</td></tr>`;
+    $('sBody').innerHTML = rows;
+    let btns = '';
+    if (level < 4) btns += `<button class="big" id="sNext">挑戰第 ${level + 2} 關 ▶</button>`;
+    else btns += `<div style="font-size:26px;margin-bottom:10px">🎉 五關全部完成，太厲害了！</div>`;
+    btns += `<div><button class="mid" id="sAgain">重玩這一關</button><button class="mid" id="sRec">成果紀錄</button><button class="mid" id="sHome">回首頁</button></div>`;
+    $('sButtons').innerHTML = btns;
+    $('summary').classList.add('show');
+    if ($('sNext')) $('sNext').onclick = () => { $('summary').classList.remove('show'); startLevel(level + 1); };
+    $('sAgain').onclick = () => { $('summary').classList.remove('show'); startLevel(level); };
+    $('sRec').onclick = () => openRecords();
+    $('sHome').onclick = () => { $('summary').classList.remove('show'); goHome(); };
+  }
+
+  let hintTimer = null;
+  function showHint(t, ms = 1800) {
+    const h = $('hint'); h.textContent = t; h.style.display = 'block';
+    clearTimeout(hintTimer); hintTimer = setTimeout(() => h.style.display = 'none', ms);
+  }
+
+  // ===== 觸控筆輸入 =====
+  function addPoint(p) {
+    const st = strokes[strokes.length - 1];
+    const last = st.pts[st.pts.length - 1];
+    // 每 3 像素檢查一次，避免移動太快漏掉出界
+    const d = Math.hypot(p.x - last.x, p.y - last.y);
+    const n = Math.max(1, Math.ceil(d / 3));
+    for (let k = 1; k <= n; k++) {
+      const q = { x: last.x + (p.x - last.x) * k / n, y: last.y + (p.y - last.y) * k / n };
+      const inside = isInside(q);
+      if (lastInside && !inside) {
+        outCount++;
+        $('hOut').textContent = outCount;
+        const chip = $('outChip'); chip.classList.remove('flash'); void chip.offsetWidth; chip.classList.add('flash');
+      }
+      lastInside = inside;
+      q.in = inside;
+      if (k === n || k % 3 === 0) st.pts.push(q);
+    }
+    tip = { x: p.x, y: p.y };
+    // 車子像被繩子拉著，跟在筆尖後面，不會擋住前方的車道
+    const D = followDist();
+    const dx = tip.x - car.x, dy = tip.y - car.y, dist = Math.hypot(dx, dy);
+    if (dist > D) { car.x = tip.x - dx / dist * D; car.y = tip.y - dy / dist * D; }
+    if (dist > 2) {
+      const a = Math.atan2(dy, dx), ab = Math.abs(a);
+      if (!car.flip && ab > Math.PI / 2 + 0.25) car.flip = true;       // 往左開時左右翻轉，避免車子倒過來
+      else if (car.flip && ab < Math.PI / 2 - 0.25) car.flip = false;
+      car.ang = car.flip ? (a > 0 ? a - Math.PI : a + Math.PI) : a;
+    }
+    if (p.x >= FINISH_X && lastInside && progress > path.length - 40) finishTrack();
+  }
+
+  canvas.addEventListener('pointerdown', e => {
+    if (phase !== 'play') return;
+    if (e.pointerType === 'pen') penSeen = true;
+    if (penSeen && e.pointerType === 'touch') return;   // 用筆時忽略手掌碰觸
+    if (dragging) return;
+    const p = toLogic(e);
+    if (Math.hypot(p.x - tip.x, p.y - tip.y) > grabR()) { showHint('請從車頭前面的圓圈開始畫喔！'); return; }
+    dragging = true; activePointer = e.pointerId;
+    canvas.setPointerCapture(e.pointerId);
+    if (!timing && elapsed === 0) { startTime = performance.now(); }
+    timing = true; startTime = performance.now() - elapsed * 1000;
+    lastInside = isInside(tip);
+    strokes.push({ pts: [{ x: tip.x, y: tip.y, in: lastInside }] });
+    addPoint(p);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!dragging || e.pointerId !== activePointer || phase !== 'play') return;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for (const ev of (evs.length ? evs : [e])) { if (phase !== 'play') break; addPoint(toLogic(ev)); }
+    e.preventDefault();
+  });
+  const endDrag = e => {
+    if (e.pointerId !== activePointer) return;
+    dragging = false; activePointer = null;
+    if (phase === 'play') { timing = false; showHint('筆離開了，從圓圈的位置繼續畫'); }
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ===== 繪圖 =====
+  function drawBackground() {
+    ctx.fillStyle = '#9bd68a'; ctx.fillRect(-2000, -2000, W + 4000, H + 4000);
+    // 草地小點綴
+    ctx.fillStyle = 'rgba(255,255,255,.18)';
+    for (let i = 0; i < 60; i++) { const x = (i * 263) % W, y = 90 + (i * 151) % (H - 120); ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill(); }
+  }
+  function drawRoad() {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = laneW + 10; ctx.stroke(roadPath);
+    ctx.strokeStyle = '#ff9f1c'; ctx.lineWidth = laneW + 4; ctx.stroke(roadPath);
+    ctx.strokeStyle = '#5d6470'; ctx.lineWidth = laneW; ctx.stroke(roadPath);
+    if (laneW >= 60) {
+      ctx.setLineDash([18, 16]); ctx.strokeStyle = 'rgba(255,225,90,.8)'; ctx.lineWidth = 3; ctx.stroke(roadPath); ctx.setLineDash([]);
+    }
+    // 起點車庫
+    const gh = laneW + 50;
+    ctx.lineWidth = 6; ctx.strokeStyle = '#ff9f1c';
+    ctx.beginPath(); ctx.roundRect(START_X - 30, CY - gh / 2, 200, gh, 14); ctx.stroke();
+    ctx.fillStyle = '#ff9f1c'; ctx.font = 'bold 26px "Microsoft JhengHei", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('出發', START_X + 70, CY - gh / 2 - 12);
+  }
+  function drawInk() {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 5;
+    for (const st of strokes) {
+      const pts = st.pts;
+      for (let i = 1; i < pts.length; i++) {
+        ctx.strokeStyle = pts[i].in ? '#1d4ed8' : '#e11d48';
+        ctx.beginPath(); ctx.moveTo(pts[i - 1].x, pts[i - 1].y); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke();
+      }
+    }
+  }
+  function drawCar(t) {
+    const img = imgs[carId]; if (!img.complete) return;
+    const { w, h } = carSize();
+    ctx.save(); ctx.translate(car.x, car.y); ctx.rotate(car.ang);
+    if (car.flip) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    ctx.restore();
+    if (phase === 'play' && !dragging) {     // 筆尖起點提示圈
+      const r = grabR() * 0.8 + Math.sin(t / 250) * 5;
+      ctx.fillStyle = 'rgba(255,255,255,.35)';
+      ctx.strokeStyle = 'rgba(255,159,28,.95)'; ctx.lineWidth = 5; ctx.setLineDash([10, 8]);
+      ctx.beginPath(); ctx.arc(tip.x, tip.y, r, 0, 7); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#ff9f1c'; ctx.beginPath(); ctx.arc(tip.x, tip.y, 6, 0, 7); ctx.fill();
+    }
+  }
+  function drawWasher() {
+    if (!washer.complete) return;
+    const h = 300, w = h * washer.naturalWidth / washer.naturalHeight;
+    ctx.drawImage(washer, 1455 - w / 2, CY - h * 0.62, w, h);
+    ctx.fillStyle = '#1d5fbf'; ctx.font = 'bold 26px "Microsoft JhengHei", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('洗車機', 1455, CY - h * 0.62 - 10);
+  }
+  function drawBubbles(dt) {
+    if (phase === 'washing' && Math.random() < 0.7) {
+      for (let i = 0; i < 3; i++) bubbles.push({ x: 1380 + Math.random() * 150, y: CY - 120 + Math.random() * 180,
+        r: 6 + Math.random() * 14, vy: -20 - Math.random() * 40, life: 1 });
+    }
+    for (const b of bubbles) { b.y += b.vy * dt; b.life -= dt * 0.7; }
+    bubbles = bubbles.filter(b => b.life > 0);
+    for (const b of bubbles) {
+      ctx.globalAlpha = Math.max(0, b.life);
+      ctx.fillStyle = 'rgba(200,235,255,.6)'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill(); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  let lastT = performance.now();
+  function loop(t) {
+    const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
+    if (timing && phase === 'play') { elapsed = (performance.now() - startTime) / 1000; $('hTime').textContent = elapsed.toFixed(1); }
+    if (phase === 'washing') {
+      washT += dt;
+      const k = Math.min(1, washT / 1.0), e = 1 - Math.pow(1 - k, 3);
+      car.x = washFrom.x + (1460 - washFrom.x) * e; car.y = washFrom.y + (CY - washFrom.y) * e;
+      car.ang *= 0.85; car.flip = false;
+      if (washT > 2.2) showDone();
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+    drawBackground();
+    if (phase !== 'idle' && roadPath) {
+      drawRoad(); drawInk(); drawCar(t); drawWasher(); drawBubbles(dt);
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ===== 首頁與按鈕 =====
+  function renderHome() {
+    $('carList').innerHTML = CARS.map(c =>
+      `<div class="car-opt ${c.id === carId ? 'sel' : ''}" data-id="${c.id}"><img src="${c.src}" alt="${c.name}"><div>${c.name}</div></div>`).join('');
+    $('levelList').innerHTML = LEVEL_WIDTHS.map((w, i) =>
+      `<div class="lv-opt ${i === pickLevel ? 'sel' : ''}" data-lv="${i}">第 ${i + 1} 關<small>${['最寬', '寬', '中等', '窄', '最窄'][i]}</small></div>`).join('');
+    document.querySelectorAll('.car-opt').forEach(el => el.onclick = () => { carId = el.dataset.id; renderHome(); });
+    document.querySelectorAll('.lv-opt').forEach(el => el.onclick = () => { pickLevel = +el.dataset.lv; renderHome(); });
+  }
+  function goHome() {
+    phase = 'idle'; $('hud').style.display = 'none';
+    ['done', 'summary', 'records'].forEach(id => $(id).classList.remove('show'));
+    $('home').classList.add('show'); renderHome();
+  }
+  $('btnStart').onclick = () => {
+    $('home').classList.remove('show'); $('hud').style.display = 'flex';
+    const s = $('sfx'); s.load();
+    startLevel(pickLevel);
+  };
+  $('btnHome').onclick = goHome;
+  $('btnRetry').onclick = () => { $('done').classList.remove('show'); startTrack(); };
+  $('btnRedo').onclick = () => { $('done').classList.remove('show'); startTrack(); };
+  $('btnNext').onclick = () => {
+    $('done').classList.remove('show');
+    if (trackIdx < 4) { trackIdx++; startTrack(); } else { phase = 'idle2'; showSummary(); }
+  };
+
+  function openRecords() {
+    $('rBody').innerHTML = records.length ? records.map(r =>
+      `<tr><td>${esc(r.name)}</td><td>${r.car}</td><td>${r.level}（${r.width}）</td><td>${r.track}. ${r.shape}</td>
+       <td class="${r.outs ? 'bad' : 'good'}">${r.outs}</td><td>${r.time.toFixed(1)}</td><td>${r.date}</td></tr>`).join('')
+      : '<tr><td colspan="7" style="color:#888">還沒有紀錄</td></tr>';
+    $('records').classList.add('show');
+  }
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('btnRecords').onclick = openRecords;
+  $('btnRecClose').onclick = () => $('records').classList.remove('show');
+  $('btnCsv').onclick = () => {
+    const head = ['玩家', '車', '關卡', '車道寬度', '車道', '形狀', '超出車道次數', '時間(秒)', '完成時間'];
+    const rows = records.map(r => [r.name, r.car, r.level, r.width, r.track, r.shape, r.outs, r.time, r.date]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+    const blob = new Blob(['﻿' + [head.join(','), ...rows].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `運筆練習成果_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  };
+
+  window.__game = () => ({ tip, progress, path, scale, ox, oy, phase, outCount, trackIdx, level, car });  // 測試用
+  renderHome();
+})();
+</script>
+</body>
+</html>
